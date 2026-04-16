@@ -12,7 +12,6 @@ export function FarmCards() {
         const pendingCount = farmWorkers.filter((w) => w.status === 'Pending').length;
         const expiringCount = farmWorkers.filter((w) => w.status === 'Expiring').length;
 
-        // Calculate per-status compliance breakdown
         const fullyCompliant = farmWorkers.filter((w) => getComplianceScore(w) === 100).length;
         const partial = farmWorkers.filter((w) => {
           const s = getComplianceScore(w);
@@ -28,23 +27,25 @@ export function FarmCards() {
             : 'text-danger-600 dark:text-danger-400';
 
         const complianceBarColor =
-          compliance >= 90
-            ? 'bg-leaf-500'
-            : compliance >= 70
-            ? 'bg-warning-500'
-            : 'bg-danger-500';
+          compliance >= 90 ? 'bg-leaf-500' : compliance >= 70 ? 'bg-warning-500' : 'bg-danger-500';
 
         return (
           <motion.div
             key={farm.id}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 + i * 0.08 }}
-            className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-lg hover:shadow-gray-200/50 dark:hover:shadow-gray-900/50 transition-shadow group"
+            whileHover={{ y: -3 }}
+            transition={{
+              delay: 0.18 + i * 0.07,
+              type: 'spring',
+              stiffness: 260,
+              damping: 28,
+            }}
+            className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-lg hover:shadow-leaf-900/5 dark:hover:shadow-black/40 transition-shadow group cursor-default"
           >
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight tracking-tight">
                   {farm.name}
                 </h3>
                 <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -52,28 +53,22 @@ export function FarmCards() {
                   {farm.location}
                 </div>
               </div>
-              <div className="p-1.5 rounded-lg bg-leaf-50 dark:bg-leaf-950/40">
+              <div className="p-1.5 rounded-lg bg-leaf-50 dark:bg-leaf-950/40 group-hover:bg-leaf-100 dark:group-hover:bg-leaf-950/70 transition-colors">
                 <Wheat className="w-4 h-4 text-leaf-600 dark:text-leaf-400" />
               </div>
             </div>
 
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-              {farm.cropType}
-            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">{farm.cropType}</div>
 
-            {/* Worker count */}
             <div className="flex items-center gap-2 mb-3">
               <Users className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
+              <span className="text-sm font-medium text-gray-900 dark:text-white tabular-nums">
                 {farmWorkers.length}
               </span>
-              <span className="text-xs text-gray-400 dark:text-gray-500">
-                / {farm.workerCapacity} capacity
-              </span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">/ {farm.workerCapacity} capacity</span>
             </div>
 
-            {/* Status pills */}
-            <div className="flex gap-1.5 mb-4">
+            <div className="flex gap-1.5 mb-4 flex-wrap">
               {activeCount > 0 && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-leaf-100 dark:bg-leaf-900/30 text-leaf-700 dark:text-leaf-400">
                   {activeCount} Active
@@ -91,22 +86,19 @@ export function FarmCards() {
               )}
             </div>
 
-            {/* Compliance bar */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-1.5">
                   <TrendingUp className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                    Compliance
-                  </span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Compliance</span>
                 </div>
-                <span className={`text-sm font-bold ${complianceColor}`}>{compliance}%</span>
+                <span className={`text-sm font-bold tabular-nums ${complianceColor}`}>{compliance}%</span>
               </div>
               <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${compliance}%` }}
-                  transition={{ delay: 0.5 + i * 0.1, duration: 0.8, ease: 'easeOut' }}
+                  transition={{ delay: 0.45 + i * 0.08, duration: 1, ease: [0.22, 1, 0.36, 1] }}
                   className={`h-full rounded-full ${complianceBarColor}`}
                 />
               </div>

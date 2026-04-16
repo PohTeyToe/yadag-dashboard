@@ -1,20 +1,20 @@
-import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronDown,
-  ChevronUp,
   FileCheck2,
   FileX2,
   FileClock,
   FileQuestion,
   CalendarDays,
   Plane,
+  SearchX,
 } from 'lucide-react';
 import { farms, getComplianceScore, getCountryFlag } from '../data/mockData';
 import type { Worker, WorkerDocument } from '../types';
 
 interface WorkerTableProps {
   workers: Worker[];
+  onSelectWorker: (worker: Worker) => void;
+  onClearFilters?: () => void;
 }
 
 function DocumentBadge({ doc }: { doc: WorkerDocument }) {
@@ -46,11 +46,6 @@ function DocumentBadge({ doc }: { doc: WorkerDocument }) {
     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-medium ${config.className}`}>
       <Icon className="w-3 h-3" />
       <span>{doc.name}</span>
-      {doc.expiryDate && (
-        <span className="opacity-60 text-[10px]">
-          ({new Date(doc.expiryDate).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })})
-        </span>
-      )}
     </div>
   );
 }
@@ -73,27 +68,44 @@ function ComplianceBar({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="w-16 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${score}%` }} />
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${score}%` }}
+          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+          className={`h-full rounded-full ${color}`}
+        />
       </div>
-      <span className={`text-xs font-semibold ${textColor}`}>{score}%</span>
+      <span className={`text-xs font-semibold tabular-nums ${textColor}`}>{score}%</span>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const config = {
+  const config: Record<string, string> = {
     Active: 'bg-leaf-100 dark:bg-leaf-900/30 text-leaf-700 dark:text-leaf-400',
     Pending: 'bg-warning-100 dark:bg-warning-900/30 text-warning-700 dark:text-warning-400',
     Expiring: 'bg-danger-100 dark:bg-danger-900/30 text-danger-700 dark:text-danger-400',
-  }[status] || 'bg-gray-100 text-gray-700';
+    Unassigned: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300',
+  };
+  const cls = config[status] || 'bg-gray-100 text-gray-700';
+  const dot =
+    status === 'Active'
+      ? 'bg-leaf-500'
+      : status === 'Pending'
+      ? 'bg-warning-500'
+      : status === 'Expiring'
+      ? 'bg-danger-500'
+      : 'bg-gray-400';
+
+  const isCritical = status === 'Expiring';
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config}`}>
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${
-          status === 'Active' ? 'bg-leaf-500' : status === 'Pending' ? 'bg-warning-500' : 'bg-danger-500'
-        }`}
-      />
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls} ${
+        isCritical ? 'pulse-critical' : ''
+      }`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
       {status}
     </span>
   );
@@ -107,13 +119,12 @@ function VisaBadge({ visa }: { visa: string }) {
   );
 }
 
-export function WorkerTable({ workers }: WorkerTableProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
+export function WorkerTable({ workers, onSelectWorker, onClearFilters }: WorkerTableProps) {
   const farmMap = Object.fromEntries(farms.map((f) => [f.id, f.name]));
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.35 }}
@@ -121,7 +132,7 @@ export function WorkerTable({ workers }: WorkerTableProps) {
     >
       <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Worker Roster</h2>
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
           {workers.length} worker{workers.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -139,114 +150,92 @@ export function WorkerTable({ workers }: WorkerTableProps) {
                   {h}
                 </th>
               ))}
-              <th className="px-5 py-3 w-10" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-            {workers.map((worker) => {
-              const compliance = getComplianceScore(worker);
-              const isExpanded = expandedId === worker.id;
-              return (
-                <motion.tr
-                  key={worker.id}
-                  layout
-                  className="group hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer"
-                  onClick={() => setExpandedId(isExpanded ? null : worker.id)}
-                >
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-leaf-300 to-leaf-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                        {worker.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join('')}
+          <tbody>
+            <AnimatePresence mode="popLayout" initial={false}>
+              {workers.map((worker, i) => {
+                const compliance = getComplianceScore(worker);
+                return (
+                  <motion.tr
+                    key={worker.id}
+                    layout
+                    layoutId={`worker-${worker.id}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ delay: Math.min(i * 0.025, 0.4), duration: 0.25 }}
+                    whileHover={{ backgroundColor: 'rgba(34, 197, 94, 0.04)' }}
+                    className="group border-b border-gray-50 dark:border-gray-800/50 hover:bg-leaf-50/40 dark:hover:bg-leaf-950/20 transition-colors cursor-pointer"
+                    onClick={() => onSelectWorker(worker)}
+                  >
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-leaf-300 to-leaf-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                          {worker.name
+                            .split(' ')
+                            .map((n) => n[0])
+                            .slice(0, 2)
+                            .join('')}
+                        </div>
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {worker.name}
+                        </span>
                       </div>
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {worker.name}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{getCountryFlag(worker.countryCode)}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">{worker.countryOfOrigin}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">
+                        {worker.farmId ? farmMap[worker.farmId] : <em className="text-gray-400">Unassigned</em>}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">{getCountryFlag(worker.countryCode)}</span>
-                      <span className="text-sm text-gray-600 dark:text-gray-300">{worker.countryOfOrigin}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="text-sm text-gray-600 dark:text-gray-300">{farmMap[worker.farmId]}</span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <VisaBadge visa={worker.visaType} />
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <StatusBadge status={worker.status} />
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <ComplianceBar score={compliance} />
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
-                      <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-                      {new Date(worker.arrivalDate).toLocaleDateString('en-CA', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {isExpanded ? (
-                      <ChevronUp className="w-4 h-4 text-gray-400" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    )}
-                  </td>
-                </motion.tr>
-              );
-            })}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <VisaBadge visa={worker.visaType} />
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge status={worker.status} />
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <ComplianceBar score={compliance} />
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
+                        <CalendarDays className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                        {new Date(worker.arrivalDate).toLocaleDateString('en-CA', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </div>
+                    </td>
+                  </motion.tr>
+                );
+              })}
+            </AnimatePresence>
           </tbody>
         </table>
-
-        {/* Expanded document view */}
-        <AnimatePresence>
-          {expandedId && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 px-5 py-4"
-            >
-              {(() => {
-                const worker = workers.find((w) => w.id === expandedId);
-                if (!worker) return null;
-                return (
-                  <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
-                      Document Compliance for {worker.name}
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {worker.documents.map((doc) => (
-                        <DocumentBadge key={doc.name} doc={doc} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Mobile cards */}
       <div className="lg:hidden divide-y divide-gray-100 dark:divide-gray-800">
-        {workers.map((worker) => {
-          const compliance = getComplianceScore(worker);
-          const isExpanded = expandedId === worker.id;
-          return (
-            <div key={worker.id}>
-              <button
-                onClick={() => setExpandedId(isExpanded ? null : worker.id)}
+        <AnimatePresence mode="popLayout" initial={false}>
+          {workers.map((worker, i) => {
+            const compliance = getComplianceScore(worker);
+            return (
+              <motion.button
+                key={worker.id}
+                layout
+                layoutId={`worker-${worker.id}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                onClick={() => onSelectWorker(worker)}
                 className="w-full text-left px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -276,7 +265,7 @@ export function WorkerTable({ workers }: WorkerTableProps) {
                 <div className="mt-2 flex items-center gap-4 pl-12 text-xs text-gray-500 dark:text-gray-400">
                   <span className="flex items-center gap-1">
                     <Plane className="w-3 h-3" />
-                    {farmMap[worker.farmId]}
+                    {worker.farmId ? farmMap[worker.farmId] : 'Unassigned'}
                   </span>
                   <span className="flex items-center gap-1">
                     <CalendarDays className="w-3 h-3" />
@@ -286,40 +275,39 @@ export function WorkerTable({ workers }: WorkerTableProps) {
                     })}
                   </span>
                 </div>
-              </button>
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="bg-gray-50/50 dark:bg-gray-800/30 px-4 py-3 border-t border-gray-100 dark:border-gray-800"
-                  >
-                    <h4 className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
-                      Documents
-                    </h4>
-                    <div className="flex flex-wrap gap-1.5">
-                      {worker.documents.map((doc) => (
-                        <DocumentBadge key={doc.name} doc={doc} />
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
+              </motion.button>
+            );
+          })}
+        </AnimatePresence>
       </div>
 
       {workers.length === 0 && (
-        <div className="px-5 py-12 text-center">
-          <div className="text-gray-400 dark:text-gray-500 mb-2">
-            <FileX2 className="w-8 h-8 mx-auto" />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="px-5 py-14 text-center"
+        >
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 mb-3">
+            <SearchX className="w-6 h-6 text-gray-400 dark:text-gray-500" />
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">No workers match your filters.</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try adjusting your search criteria.</p>
-        </div>
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">No workers match these filters.</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xs mx-auto">
+            Try broadening your search or selecting a different farm.
+          </p>
+          {onClearFilters && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={onClearFilters}
+              className="mt-4 px-3 py-1.5 text-xs font-semibold rounded-lg bg-leaf-600 hover:bg-leaf-700 text-white transition-colors"
+            >
+              Clear filters
+            </motion.button>
+          )}
+        </motion.div>
       )}
     </motion.div>
   );
 }
+
+// Keep unused DocumentBadge export internal; remove to avoid unused warnings if needed
+export { DocumentBadge };

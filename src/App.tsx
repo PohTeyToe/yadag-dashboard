@@ -1,17 +1,24 @@
-import { useState, useMemo } from 'react';
-import { Header } from './components/Header';
+import { useEffect, useState, useMemo } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Header, type DashboardView } from './components/Header';
 import { StatsBar } from './components/StatsBar';
 import { FarmCards } from './components/FarmCards';
 import { ExpiryAlerts } from './components/ExpiryAlerts';
 import { Filters } from './components/Filters';
 import { WorkerTable } from './components/WorkerTable';
+import { MatchPanel } from './components/MatchPanel';
+import { WorkerDrawer } from './components/WorkerDrawer';
+import { FarmMap } from './components/FarmMap';
+import { DashboardSkeleton } from './components/Skeleton';
 import { useDarkMode } from './hooks/useDarkMode';
-import { workers } from './data/mockData';
-import { getComplianceScore } from './data/mockData';
-import type { FilterState } from './types';
+import { getAssignedWorkers, getComplianceScore } from './data/mockData';
+import type { FilterState, Worker } from './types';
 
 function App() {
   const [isDark, setIsDark] = useDarkMode();
+  const [view, setView] = useState<DashboardView>('table');
+  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>({
     farm: '',
     status: '',
@@ -20,8 +27,13 @@ function App() {
     search: '',
   });
 
+  useEffect(() => {
+    const t = setTimeout(() => setIsLoading(false), 420);
+    return () => clearTimeout(t);
+  }, []);
+
   const filteredWorkers = useMemo(() => {
-    return workers.filter((w) => {
+    return getAssignedWorkers().filter((w) => {
       if (filters.search) {
         const query = filters.search.toLowerCase();
         if (!w.name.toLowerCase().includes(query)) return false;
@@ -39,51 +51,116 @@ function App() {
     });
   }, [filters]);
 
+  const clearFilters = () =>
+    setFilters({ farm: '', status: '', visaType: '', compliance: '', search: '' });
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors">
-      <Header isDark={isDark} onToggleDark={() => setIsDark(!isDark)} />
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-black text-gray-900 dark:text-white transition-colors">
+      <Header
+        isDark={isDark}
+        onToggleDark={() => setIsDark(!isDark)}
+        view={view}
+        onViewChange={setView}
+      />
 
       <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Stats */}
-        <StatsBar />
+        <AnimatePresence mode="wait">
+          {isLoading ? (
+            <motion.div
+              key="skeleton"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <DashboardSkeleton />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.35 }}
+              className="space-y-6"
+            >
+              <StatsBar />
 
-        {/* Farm cards + Expiry alerts */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 space-y-6">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                Farm Overview
-              </h2>
-              <FarmCards />
-            </div>
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-              Upcoming Expirations
-            </h2>
-            <ExpiryAlerts />
-          </div>
-        </div>
+              <MatchPanel />
 
-        {/* Filters + Worker table */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Worker Management
-          </h2>
-          <Filters filters={filters} onChange={setFilters} />
-          <WorkerTable workers={filteredWorkers} />
-        </div>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div className="xl:col-span-2 space-y-6">
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                      Farm Overview
+                    </h2>
+                    <FarmCards />
+                  </div>
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                    Upcoming Expirations
+                  </h2>
+                  <ExpiryAlerts />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    {view === 'table' ? 'Worker Management' : 'Field View'}
+                  </h2>
+                </div>
+
+                <AnimatePresence mode="wait">
+                  {view === 'table' ? (
+                    <motion.div
+                      key="table"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25 }}
+                      className="space-y-4"
+                    >
+                      <Filters filters={filters} onChange={setFilters} />
+                      <WorkerTable
+                        workers={filteredWorkers}
+                        onSelectWorker={setSelectedWorker}
+                        onClearFilters={clearFilters}
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="map"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <FarmMap />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 mt-8">
+      <WorkerDrawer worker={selectedWorker} onClose={() => setSelectedWorker(null)} />
+
+      <footer className="border-t border-gray-200 dark:border-gray-800 mt-10">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            Yadag Worker Onboarding Dashboard. Demo built by Abdallah Safi for Riipen internship application.
+          <p className="text-xs text-gray-500 dark:text-gray-500">
+            Built by Abdallah Safi for the Yadag team. Riipen AO April 2026 Cohort.
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            React 19 + TypeScript + Tailwind CSS v4 + Framer Motion
-          </p>
+          <a
+            href="https://github.com/PohTeyToe/yadag-dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-gray-500 dark:text-gray-500 hover:text-leaf-600 dark:hover:text-leaf-400 transition-colors"
+          >
+            github.com/PohTeyToe/yadag-dashboard
+          </a>
         </div>
       </footer>
     </div>
