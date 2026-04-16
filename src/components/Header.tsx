@@ -3,15 +3,20 @@ import { Sprout, Sun, Moon, Menu, X, LayoutGrid, Map as MapIcon } from 'lucide-r
 import { useState } from 'react';
 
 export type DashboardView = 'table' | 'map';
+export type NavSection = 'Dashboard' | 'Workers' | 'Farms' | 'Compliance';
+
+const NAV_ITEMS: NavSection[] = ['Dashboard', 'Workers', 'Farms', 'Compliance'];
 
 interface HeaderProps {
   isDark: boolean;
   onToggleDark: () => void;
   view: DashboardView;
   onViewChange: (v: DashboardView) => void;
+  activeSection: NavSection;
+  onNavClick: (section: NavSection) => void;
 }
 
-export function Header({ isDark, onToggleDark, view, onViewChange }: HeaderProps) {
+export function Header({ isDark, onToggleDark, view, onViewChange, activeSection, onNavClick }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -38,15 +43,16 @@ export function Header({ isDark, onToggleDark, view, onViewChange }: HeaderProps
           </motion.div>
 
           <nav className="hidden md:flex items-center gap-1">
-            {['Dashboard', 'Workers', 'Farms', 'Compliance'].map((item, i) => (
+            {NAV_ITEMS.map((item, i) => (
               <motion.button
                 key={item}
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 whileTap={{ scale: 0.96 }}
                 transition={{ delay: 0.1 + i * 0.05 }}
+                onClick={() => onNavClick(item)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                  i === 0
+                  activeSection === item
                     ? 'bg-leaf-50 dark:bg-leaf-950/50 text-leaf-700 dark:text-leaf-400'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
@@ -168,11 +174,15 @@ export function Header({ isDark, onToggleDark, view, onViewChange }: HeaderProps
                   </button>
                 ))}
               </div>
-              {['Dashboard', 'Workers', 'Farms', 'Compliance'].map((item, i) => (
+              {NAV_ITEMS.map((item) => (
                 <button
                   key={item}
+                  onClick={() => {
+                    onNavClick(item);
+                    setMobileMenuOpen(false);
+                  }}
                   className={`block w-full text-left px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    i === 0
+                    activeSection === item
                       ? 'bg-leaf-50 dark:bg-leaf-950/50 text-leaf-700 dark:text-leaf-400'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}

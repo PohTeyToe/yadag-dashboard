@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Header, type DashboardView } from './components/Header';
+import { Header, type DashboardView, type NavSection } from './components/Header';
 import { StatsBar } from './components/StatsBar';
 import { FarmCards } from './components/FarmCards';
 import { ExpiryAlerts } from './components/ExpiryAlerts';
@@ -19,6 +19,7 @@ function App() {
   const [view, setView] = useState<DashboardView>('table');
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<NavSection>('Dashboard');
   const [filters, setFilters] = useState<FilterState>({
     farm: '',
     status: '',
@@ -27,10 +28,49 @@ function App() {
     search: '',
   });
 
+  const dashboardRef = useRef<HTMLDivElement>(null);
+  const workersRef = useRef<HTMLDivElement>(null);
+  const farmsRef = useRef<HTMLDivElement>(null);
+  const complianceRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const t = setTimeout(() => setIsLoading(false), 420);
     return () => clearTimeout(t);
   }, []);
+
+  const scrollToSection = (section: NavSection) => {
+    const refMap: Record<NavSection, React.RefObject<HTMLDivElement | null>> = {
+      Dashboard: dashboardRef,
+      Workers: workersRef,
+      Farms: farmsRef,
+      Compliance: complianceRef,
+    };
+    const el = refMap[section].current;
+    if (!el) return;
+    const headerOffset = 80;
+    const top = el.getBoundingClientRect().top + window.scrollY - headerOffset;
+    window.scrollTo({ top, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (isLoading) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => (a.target.getBoundingClientRect().top - b.target.getBoundingClientRect().top));
+        if (visible.length > 0) {
+          const section = visible[0].target.getAttribute('data-section') as NavSection | null;
+          if (section) setActiveSection(section);
+        }
+      },
+      { rootMargin: '-100px 0px -50% 0px', threshold: 0 }
+    );
+    [dashboardRef, workersRef, farmsRef, complianceRef].forEach((ref) => {
+      if (ref.current) observer.observe(ref.current);
+    });
+    return () => observer.disconnect();
+  }, [isLoading, view]);
 
   const filteredWorkers = useMemo(() => {
     return getAssignedWorkers().filter((w) => {
@@ -61,6 +101,8 @@ function App() {
         onToggleDark={() => setIsDark(!isDark)}
         view={view}
         onViewChange={setView}
+        activeSection={activeSection}
+        onNavClick={scrollToSection}
       />
 
       <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -83,20 +125,21 @@ function App() {
               transition={{ duration: 0.35 }}
               className="space-y-6"
             >
-              <StatsBar />
-
-              <MatchPanel />
+              <div ref={dashboardRef} data-section="Dashboard" className="space-y-6 scroll-mt-20">
+                <StatsBar />
+                <MatchPanel />
+              </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className="xl:col-span-2 space-y-6">
-                  <div>
+                  <div ref={farmsRef} data-section="Farms" className="scroll-mt-20">
                     <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                       Farm Overview
                     </h2>
                     <FarmCards />
                   </div>
                 </div>
-                <div>
+                <div ref={complianceRef} data-section="Compliance" className="scroll-mt-20">
                   <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                     Upcoming Expirations
                   </h2>
@@ -104,7 +147,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div ref={workersRef} data-section="Workers" className="space-y-4 scroll-mt-20">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {view === 'table' ? 'Worker Management' : 'Field View'}
